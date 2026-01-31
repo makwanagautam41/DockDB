@@ -1,0 +1,248 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* MongoDB Database Management - Dark Theme Design System
+   IDE-like aesthetics with high information density
+*/
+
+@layer base {
+  :root {
+    /* Core colors */
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
+
+    --popover: 222 47% 8%;
+    --popover-foreground: 213 31% 91%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 224 71% 4%;
+
+    --secondary: 217 19% 27%;
+    --secondary-foreground: 213 31% 91%;
+
+    --muted: 217 19% 27%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 19% 17%;
+    --accent-foreground: 213 31% 91%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 19% 27%;
+    --input: 217 19% 27%;
+    --ring: 224 76% 48%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar tokens */
+    --sidebar-background: 222 47% 6%;
+    --sidebar-foreground: 213 31% 85%;
+    --sidebar-primary: 210 40% 98%;
+    --sidebar-primary-foreground: 224 71% 4%;
+    --sidebar-accent: 217 19% 17%;
+    --sidebar-accent-foreground: 213 31% 91%;
+    --sidebar-border: 217 19% 20%;
+    --sidebar-ring: 224 76% 48%;
+
+    /* MongoDB theme tokens */
+    --mongo-green: 142 71% 45%;
+    --mongo-green-dim: 142 50% 35%;
+    --mongo-surface-1: 224 71% 4%;
+    --mongo-surface-2: 222 47% 8%;
+    --mongo-surface-3: 217 19% 12%;
+    --mongo-text-primary: 213 31% 91%;
+    --mongo-text-secondary: 215 20% 65%;
+    --mongo-text-muted: 215 14% 45%;
+    --mongo-success: 142 71% 45%;
+    --mongo-warning: 34 88% 68%;
+    --mongo-error: 0 63% 45%;
+    --mongo-info: 224 76% 48%;
+
+    /* Syntax highlighting */
+    --sh-comment: 218 27% 45%;
+    --sh-string: 125 50% 64%;
+    --sh-number: 34 88% 68%;
+    --sh-keyword: 275 60% 75%;
+    --sh-function: 205 70% 70%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 400;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  /* Tree view styles */
+  .tree-item {
+    @apply flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-all duration-150;
+    @apply hover:bg-muted/80;
+  }
+
+  .tree-item.active {
+    @apply bg-primary/15 text-primary;
+  }
+
+  .tree-item .expand-icon {
+    @apply transition-transform duration-200;
+  }
+
+  .tree-item.expanded .expand-icon {
+    @apply rotate-90;
+  }
+
+  /* Document table row */
+  .doc-row {
+    @apply border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors;
+  }
+
+  .doc-row.selected {
+    @apply bg-primary/10;
+  }
+
+  /* Status badges */
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .status-connected {
+    @apply bg-primary/15 text-primary;
+  }
+
+  .status-disconnected {
+    @apply bg-destructive/15 text-destructive;
+  }
+
+  .status-loading {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* Skeleton loader */
+  .skeleton {
+    @apply animate-pulse bg-muted rounded;
+  }
+
+  /* Code highlighting colors - using syntax highlighting tokens */
+  .json-key {
+    color: hsl(var(--sh-function));
+  }
+
+  .json-string {
+    color: hsl(var(--sh-string));
+  }
+
+  .json-number {
+    color: hsl(var(--sh-number));
+  }
+
+  .json-boolean {
+    color: hsl(var(--sh-keyword));
+  }
+
+  .json-null {
+    color: hsl(var(--sh-comment));
+    font-style: italic;
+  }
+
+  /* Scrollbar styling */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-border/60 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-border;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    @apply w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin;
+  }
+
+  /* Panel transitions */
+  .panel-enter {
+    @apply animate-in fade-in-0 slide-in-from-right-4 duration-300;
+  }
+
+  .panel-exit {
+    @apply animate-out fade-out-0 slide-out-to-right-4 duration-200;
+  }
+
+  /* Responsive sidebar */
+  .sidebar-container {
+    @apply fixed inset-y-0 left-0 z-40 w-64 bg-sidebar border-r border-sidebar-border;
+    @apply lg:relative lg:translate-x-0;
+    @apply transition-transform duration-300 ease-in-out;
+  }
+
+  .sidebar-container.collapsed {
+    @apply -translate-x-full lg:translate-x-0 lg:w-14;
+  }
+
+  /* Query editor */
+  .query-editor-container {
+    @apply rounded-lg border border-border overflow-hidden;
+  }
+}
+
+/* IDE-like enhancements */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(215 20% 40%);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Selection styling */
+::selection {
+  background: hsl(var(--ring) / 0.3);
+  color: hsl(var(--foreground));
+}
