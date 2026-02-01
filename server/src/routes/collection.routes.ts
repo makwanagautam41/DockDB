@@ -13,6 +13,7 @@ import {
   renameCollection,
   createIndex,
   dropIndex,
+  detectCollectionSchema,
 } from '../controllers/collection.controller';
 import { validateBody, createCollectionSchema } from '../middleware/validation.middleware';
 
@@ -26,6 +27,9 @@ router.get('/:connectionId/:databaseName/:collectionName/stats', getCollectionSt
 
 // Get collection indexes
 router.get('/:connectionId/:databaseName/:collectionName/indexes', getCollectionIndexes);
+
+// Detect collection schema
+router.get('/:connectionId/:databaseName/:collectionName/schema', detectCollectionSchema);
 
 // Create new collection
 router.post(

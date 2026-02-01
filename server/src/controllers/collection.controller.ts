@@ -29,11 +29,28 @@ export const listCollections = asyncHandler(async (req: Request, res: Response) 
   const db = client.db(databaseName);
   const collections = await db.listCollections().toArray();
 
-  const collectionList = collections.map((col: any) => ({
-    name: col.name,
-    type: col.type || 'collection',
-    options: col.options || {},
-  }));
+  // Get document count for each collection
+  const collectionList = await Promise.all(
+    collections.map(async (col: any) => {
+      try {
+        const count = await db.collection(col.name).countDocuments();
+        return {
+          name: col.name,
+          type: col.type || 'collection',
+          options: col.options || {},
+          documentCount: count,
+        };
+      } catch (error) {
+        // If count fails, return 0
+        return {
+          name: col.name,
+          type: col.type || 'collection',
+          options: col.options || {},
+          documentCount: 0,
+        };
+      }
+    })
+  );
 
   return sendSuccess(
     res,
@@ -263,3 +280,106 @@ export const dropIndex = asyncHandler(async (req: Request, res: Response) => {
 
   return sendSuccess(res, null, 'Index dropped successfully');
 });
+
+/**
+ * Detect collection schema by analyzing documents
+ * GET /api/collections/:connectionId/:databaseName/:collectionName/schema
+ */
+export const detectCollectionSchema = asyncHandler(async (req: Request, res: Response) => {
+  const { connectionId, databaseName, collectionName } = req.params;
+  const { sampleSize = 10 } = req.query;
+
+  // Get connection string
+  const connectionString = await connectionModel.getDecryptedConnectionString(connectionId);
+  if (!connectionString) {
+    return sendNotFound(res, 'Connection');
+  }
+
+  // Create/get MongoDB client
+  const client = await mongodbService.createClient(connectionId, connectionString);
+
+  // Get sample documents
+  const db = client.db(databaseName);
+  const collection = db.collection(collectionName);
+  
+  const documents = await collection
+    .find({})
+    .limit(parseInt(sampleSize as string))
+    .toArray();
+
+  if (documents.length === 0) {
+    // Return basic schema if no documents exist
+    return sendSuccess(res, {
+      fields: [
+        { name: '_id', type: 'ObjectId', required: true, example: null },
+      ],
+      sampleSize: 0,
+    }, 'No documents found, returning basic schema');
+  }
+
+  // Analyze documents to detect schema
+  const fieldMap = new Map<string, { types: Set<string>; required: number; examples: any[] }>();
+
+  documents.forEach((doc) => {
+    const analyzeObject = (obj: any, prefix = '') => {
+      Object.keys(obj).forEach((key) => {
+        const fullKey = prefix ? `${prefix}.${key}` : key;
+        const value = obj[key];
+        const type = getValueType(value);
+
+        if (!fieldMap.has(fullKey)) {
+          fieldMap.set(fullKey, {
+            types: new Set(),
+            required: 0,
+            examples: [],
+          });
+        }
+
+        const field = fieldMap.get(fullKey)!;
+        field.types.add(type);
+        field.required++;
+        
+        // Store example value (limit to 3 examples)
+        if (field.examples.length < 3 && value !== null && value !== undefined) {
+          field.examples.push(value);
+        }
+
+        // Recursively analyze nested objects (but not arrays)
+        if (type === 'Object' && value !== null) {
+          analyzeObject(value, fullKey);
+        }
+      });
+    };
+
+    analyzeObject(doc);
+  });
+
+  // Convert to schema format
+  const schema = Array.from(fieldMap.entries()).map(([name, data]) => ({
+    name,
+    type: Array.from(data.types).join(' | '),
+    required: data.required === documents.length,
+    example: data.examples[0] || null,
+  }));
+
+  return sendSuccess(res, {
+    fields: schema,
+    sampleSize: documents.length,
+  }, 'Schema detected successfully');
+});
+
+/**
+ * Helper function to determine value type
+ */
+function getValueType(value: any): string {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (Array.isArray(value)) return 'Array';
+  if (value instanceof Date) return 'Date';
+  if (typeof value === 'object' && value._bsontype === 'ObjectId') return 'ObjectId';
+  if (typeof value === 'object') return 'Object';
+  if (typeof value === 'string') return 'String';
+  if (typeof value === 'number') return Number.isInteger(value) ? 'Number' : 'Number';
+  if (typeof value === 'boolean') return 'Boolean';
+  return 'Mixed';
+}

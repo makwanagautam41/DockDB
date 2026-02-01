@@ -415,7 +415,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const collections: ApiCollection[] = apiCollections.map((col) => ({
         ...col,
         databaseName,
-        documentCount: 0,
+        documentCount: col.documentCount || 0, // Use count from API
       }));
 
       dispatch({ type: 'SET_COLLECTIONS', payload: collections });
@@ -438,7 +438,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const collections: ApiCollection[] = apiCollections.map((col) => ({
         ...col,
         databaseName,
-        documentCount: 0, // Will be loaded separately if needed
+        documentCount: col.documentCount || 0, // Use count from API
       }));
 
       dispatch({ type: 'SET_COLLECTIONS', payload: collections });

@@ -148,6 +148,9 @@ const MainContent: React.FC = () => {
         onDelete={async (id) => {
           await deleteDocument(id);
         }}
+        connectionId={state.activeConnection?.id}
+        databaseName={state.selectedDatabase || undefined}
+        collectionName={state.selectedCollection?.name}
       />
 
       <SearchModal

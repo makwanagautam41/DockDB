@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Copy, Trash2, AlertCircle } from 'lucide-react';
+import { X, Save, Copy, Trash2, AlertCircle, Sparkles } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,8 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Document } from '@/services';
-import { toast } from 'sonner';
+import { Document, collectionService, SchemaField } from '@/services';
+import { useToast } from '@/hooks/use-toast';
 
 interface DocumentEditorProps {
   document: Document | null;
@@ -18,6 +18,9 @@ interface DocumentEditorProps {
   onClose: () => void;
   onSave: (doc: Omit<Document, '_id'> | Document) => Promise<void>;
   onDelete?: (docId: string) => Promise<void>;
+  connectionId?: string;
+  databaseName?: string;
+  collectionName?: string;
 }
 
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
@@ -27,25 +30,134 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   onClose,
   onSave,
   onDelete,
+  connectionId,
+  databaseName,
+  collectionName,
 }) => {
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDetectingSchema, setIsDetectingSchema] = useState(false);
+  const [schemaDetected, setSchemaDetected] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (document) {
       setContent(JSON.stringify(document, null, 2));
-    } else if (isNew) {
+      setSchemaDetected(false);
+    } else if (isNew && !schemaDetected) {
+      // For new documents, try to detect schema
+      detectAndApplySchema();
+    }
+    setError(null);
+  }, [document, isNew, isOpen]);
+
+  const detectAndApplySchema = async () => {
+    if (!connectionId || !databaseName || !collectionName) {
+      // Fallback to basic template
       setContent(JSON.stringify({
-        // New document template
         field1: "value1",
         field2: 0,
         isActive: true,
         createdAt: new Date().toISOString(),
       }, null, 2));
+      return;
     }
-    setError(null);
-  }, [document, isNew, isOpen]);
+
+    setIsDetectingSchema(true);
+    try {
+      const schema = await collectionService.detectSchema(
+        connectionId,
+        databaseName,
+        collectionName,
+        10
+      );
+
+      if (schema.fields.length > 0) {
+        // Generate template from schema
+        const template = generateTemplateFromSchema(schema.fields);
+        setContent(JSON.stringify(template, null, 2));
+        setSchemaDetected(true);
+        toast({
+          title: 'Schema Detected',
+          description: `Found ${schema.fields.length} fields from ${schema.sampleSize} sample documents`,
+        });
+      } else {
+        // No documents, use basic template
+        setContent(JSON.stringify({
+          _id: "Auto-generated",
+        }, null, 2));
+      }
+    } catch (error: any) {
+      console.error('Failed to detect schema:', error);
+      // Fallback to basic template
+      setContent(JSON.stringify({
+        field1: "value1",
+        field2: 0,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      }, null, 2));
+    } finally {
+      setIsDetectingSchema(false);
+    }
+  };
+
+  const generateTemplateFromSchema = (fields: SchemaField[]): any => {
+    const template: any = {};
+
+    fields.forEach((field) => {
+      // Skip _id as it's auto-generated
+      if (field.name === '_id') {
+        return;
+      }
+
+      // Handle nested fields (e.g., "user.email")
+      const parts = field.name.split('.');
+      let current = template;
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const isLast = i === parts.length - 1;
+
+        if (isLast) {
+          // Set the value based on type
+          current[part] = getDefaultValueForType(field.type, field.example);
+        } else {
+          // Create nested object if it doesn't exist
+          if (!current[part]) {
+            current[part] = {};
+          }
+          current = current[part];
+        }
+      }
+    });
+
+    return template;
+  };
+
+  const getDefaultValueForType = (type: string, example: any): any => {
+    // Use example if available
+    if (example !== null && example !== undefined) {
+      // For sensitive fields, don't use the actual value
+      if (typeof example === 'string' && (
+        example.includes('$2b$') || // bcrypt hash
+        example.length > 50 // likely a hash or token
+      )) {
+        return '';
+      }
+      return example;
+    }
+
+    // Default values based on type
+    if (type.includes('String')) return '';
+    if (type.includes('Number')) return 0;
+    if (type.includes('Boolean')) return false;
+    if (type.includes('Date')) return new Date().toISOString();
+    if (type.includes('Array')) return [];
+    if (type.includes('Object')) return {};
+    if (type.includes('ObjectId')) return null;
+    return null;
+  };
 
   const handleSave = async () => {
     try {
@@ -54,7 +166,10 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       setIsSaving(true);
 
       await onSave(parsed);
-      toast.success(isNew ? 'Document created' : 'Document updated');
+      toast({
+        title: 'Success',
+        description: isNew ? 'Document created successfully' : 'Document updated successfully',
+      });
       onClose();
     } catch (e) {
       if (e instanceof SyntaxError) {
@@ -69,7 +184,10 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);
-    toast.success('Copied to clipboard');
+    toast({
+      title: 'Copied',
+      description: 'Document copied to clipboard',
+    });
   };
 
   const handleDelete = async () => {
@@ -77,11 +195,22 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
     try {
       await onDelete(document._id);
-      toast.success('Document deleted');
+      toast({
+        title: 'Deleted',
+        description: 'Document deleted successfully',
+      });
       onClose();
     } catch (e) {
-      toast.error('Failed to delete document');
+      toast({
+        title: 'Error',
+        description: 'Failed to delete document',
+        variant: 'destructive',
+      });
     }
+  };
+
+  const handleDetectSchema = () => {
+    detectAndApplySchema();
   };
 
   return (
@@ -89,10 +218,30 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b border-border">
           <div className="flex items-center justify-between">
-            <DialogTitle className="font-mono text-sm">
-              {isNew ? 'New Document' : document?._id}
-            </DialogTitle>
             <div className="flex items-center gap-2">
+              <DialogTitle className="font-mono text-sm">
+                {isNew ? 'New Document' : document?._id}
+              </DialogTitle>
+              {isNew && schemaDetected && (
+                <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-md flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  Schema Detected
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {isNew && connectionId && databaseName && collectionName && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDetectSchema}
+                  disabled={isDetectingSchema}
+                  title="Re-detect schema from existing documents"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {isDetectingSchema ? 'Detecting...' : 'Detect Schema'}
+                </Button>
+              )}
               <Button variant="ghost" size="icon" onClick={handleCopy}>
                 <Copy className="h-4 w-4" />
               </Button>

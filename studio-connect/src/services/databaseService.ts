@@ -44,8 +44,8 @@ export const databaseService = {
   /**
    * Create a new database
    */
-  async createDatabase(connectionId: string, databaseName: string): Promise<void> {
-    await api.post(`/databases/${connectionId}/${databaseName}/create`);
+  async createDatabase(connectionId: string, databaseName: string, initialCollection: string = 'default'): Promise<void> {
+    await api.post(`/databases/${connectionId}/${databaseName}/create`, { initialCollection });
   },
 
   /**

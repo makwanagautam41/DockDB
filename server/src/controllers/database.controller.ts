@@ -87,6 +87,7 @@ export const getDatabaseStats = asyncHandler(async (req: Request, res: Response)
  */
 export const createDatabase = asyncHandler(async (req: Request, res: Response) => {
   const { connectionId, databaseName } = req.params;
+  const { initialCollection = 'default' } = req.body;
 
   // Get connection string
   const connectionString = await connectionModel.getDecryptedConnectionString(connectionId);
@@ -98,16 +99,16 @@ export const createDatabase = asyncHandler(async (req: Request, res: Response) =
   const client = await mongodbService.createClient(connectionId, connectionString);
 
   // MongoDB creates databases implicitly when you create a collection
-  // So we'll create a temporary collection to initialize the database
+  // Create an initial collection to make the database persistent
   const db = client.db(databaseName);
-  await db.createCollection('_init');
-
-  // Optionally drop the temporary collection
-  await db.collection('_init').drop();
+  await db.createCollection(initialCollection);
 
   return sendSuccess(
     res,
-    { database: databaseName },
+    { 
+      database: databaseName,
+      initialCollection: initialCollection
+    },
     'Database created successfully',
     201
   );

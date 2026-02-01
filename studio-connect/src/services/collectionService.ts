@@ -128,4 +128,27 @@ export const collectionService = {
   ): Promise<void> {
     await api.delete(`/collections/${connectionId}/${databaseName}/${collectionName}/indexes/${indexName}`);
   },
+
+  /**
+   * Detect collection schema by analyzing existing documents
+   */
+  async detectSchema(
+    connectionId: string,
+    databaseName: string,
+    collectionName: string,
+    sampleSize: number = 10
+  ): Promise<{ fields: SchemaField[]; sampleSize: number }> {
+    const response = await api.get(
+      `/collections/${connectionId}/${databaseName}/${collectionName}/schema`,
+      { params: { sampleSize } }
+    );
+    return response.data.data;
+  },
 };
+
+export interface SchemaField {
+  name: string;
+  type: string;
+  required: boolean;
+  example: any;
+}
