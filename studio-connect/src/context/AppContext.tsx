@@ -51,7 +51,7 @@ interface AppState {
   isDocumentEditorOpen: boolean;
   isQueryEditorOpen: boolean;
   isConnectionModalOpen: boolean;
-  activeView: 'documents' | 'query' | 'stats';
+  activeView: 'documents' | 'query' | 'stats' | 'settings';
 
   // Errors
   error: string | null;
@@ -452,6 +452,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const selectCollection = useCallback(async (collection: Collection) => {
     dispatch({ type: 'SELECT_COLLECTION', payload: collection });
+    dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'documents' });
     // Documents will be loaded by the effect
   }, []);
 

@@ -8,6 +8,7 @@ import { DocumentEditor } from '@/components/DocumentEditor';
 import { QueryEditor } from '@/components/QueryEditor';
 import { StatsPanel } from '@/components/StatsPanel';
 import { ConnectionModal, ConnectionManager } from '@/components/ConnectionManager';
+import { DatabaseSettings } from '@/components/DatabaseSettings';
 import { SearchModal } from '@/components/SearchModal';
 import { Breadcrumb } from '@/components/Breadcrumb';
 import { ContentToolbar } from '@/components/ContentToolbar';
@@ -104,7 +105,9 @@ const MainContent: React.FC = () => {
         <main className="flex-1 flex flex-col overflow-hidden">
           {/* Show connection manager if no connection is active */}
           {state.activeConnection ? (
-            state.selectedCollection ? (
+            state.activeView === 'settings' ? (
+              <DatabaseSettings />
+            ) : state.selectedCollection ? (
               <>
                 <Breadcrumb />
                 <ContentToolbar

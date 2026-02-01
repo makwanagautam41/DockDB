@@ -7,12 +7,14 @@ import {
   ChevronRight,
   ChevronDown,
   Plus,
+  Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -23,12 +25,13 @@ import {
 } from '@/components/ui/dialog';
 import { useApp, Collection } from '@/context/AppContext';
 import { databaseService, collectionService } from '@/services';
-import { cn } from '@/lib/utils';
+
 import { useToast } from '@/hooks/use-toast';
 
 export const DatabaseSidebar: React.FC = () => {
   const {
     state,
+    dispatch,
     connectToDatabase,
     selectDatabase,
     loadCollections,
@@ -43,7 +46,6 @@ export const DatabaseSidebar: React.FC = () => {
   const [selectedDatabaseForCollection, setSelectedDatabaseForCollection] = useState<string>('');
   const [newDatabaseName, setNewDatabaseName] = useState('');
   const [newCollectionName, setNewCollectionName] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
 
   const handleRefresh = async () => {
     if (state.activeConnection) {
@@ -71,15 +73,24 @@ export const DatabaseSidebar: React.FC = () => {
   const handleCreateDatabase = async () => {
     if (!state.activeConnection || !newDatabaseName.trim()) return;
 
-    setIsCreating(true);
+    const dbName = newDatabaseName.trim();
+
+    // Close modal immediately
+    setShowCreateDatabaseModal(false);
+    setNewDatabaseName('');
+
+    // Show creating toast
+    toast({
+      title: 'Creating Database',
+      description: `Creating database "${dbName}"...`,
+    });
+
     try {
-      await databaseService.createDatabase(state.activeConnection.id, newDatabaseName.trim());
+      await databaseService.createDatabase(state.activeConnection.id, dbName);
       toast({
         title: 'Success',
-        description: `Database "${newDatabaseName}" created successfully`,
+        description: `Database "${dbName}" created successfully`,
       });
-      setShowCreateDatabaseModal(false);
-      setNewDatabaseName('');
       // Refresh databases
       await connectToDatabase(state.activeConnection.id);
     } catch (error: any) {
@@ -88,37 +99,43 @@ export const DatabaseSidebar: React.FC = () => {
         description: error.message || 'Failed to create database',
         variant: 'destructive',
       });
-    } finally {
-      setIsCreating(false);
     }
   };
 
   const handleCreateCollection = async () => {
     if (!state.activeConnection || !selectedDatabaseForCollection || !newCollectionName.trim()) return;
 
-    setIsCreating(true);
+    const collName = newCollectionName.trim();
+    const dbName = selectedDatabaseForCollection;
+
+    // Close modal immediately
+    setShowCreateCollectionModal(false);
+    setNewCollectionName('');
+
+    // Show creating toast
+    toast({
+      title: 'Creating Collection',
+      description: `Creating collection "${collName}" in "${dbName}"...`,
+    });
+
     try {
       await collectionService.createCollection(
         state.activeConnection.id,
-        selectedDatabaseForCollection,
-        newCollectionName.trim()
+        dbName,
+        collName
       );
       toast({
         title: 'Success',
-        description: `Collection "${newCollectionName}" created successfully`,
+        description: `Collection "${collName}" created successfully`,
       });
-      setShowCreateCollectionModal(false);
-      setNewCollectionName('');
       // Refresh collections
-      await loadCollections(state.activeConnection.id, selectedDatabaseForCollection);
+      await loadCollections(state.activeConnection.id, dbName);
     } catch (error: any) {
       toast({
         title: 'Error',
         description: error.message || 'Failed to create collection',
         variant: 'destructive',
       });
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -196,6 +213,15 @@ export const DatabaseSidebar: React.FC = () => {
             title="Refresh"
           >
             <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-7 w-7", state.activeView === 'settings' && "bg-accent")}
+            onClick={() => dispatch({ type: 'SET_ACTIVE_VIEW', payload: 'settings' })}
+            title="Database Settings"
+          >
+            <Settings className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
@@ -351,9 +377,9 @@ export const DatabaseSidebar: React.FC = () => {
             </Button>
             <Button
               onClick={handleCreateDatabase}
-              disabled={!newDatabaseName.trim() || isCreating}
+              disabled={!newDatabaseName.trim()}
             >
-              {isCreating ? 'Creating...' : 'Create Database'}
+              Create Database
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -393,9 +419,9 @@ export const DatabaseSidebar: React.FC = () => {
             </Button>
             <Button
               onClick={handleCreateCollection}
-              disabled={!newCollectionName.trim() || isCreating}
+              disabled={!newCollectionName.trim()}
             >
-              {isCreating ? 'Creating...' : 'Create Collection'}
+              Create Collection
             </Button>
           </DialogFooter>
         </DialogContent>
