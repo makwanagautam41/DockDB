@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  ChevronUp, 
-  ChevronDown, 
+import {
+  ChevronUp,
+  ChevronDown,
   MoreHorizontal,
   Copy,
   Edit,
@@ -38,7 +38,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useApp } from '@/context/AppContext';
-import { Document } from '@/lib/mockData';
+import { Document } from '@/services';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -65,12 +65,12 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
 
   const handleSort = (field: string) => {
     if (state.sortField === field) {
-      dispatch({ 
-        type: 'SET_SORT', 
-        payload: { 
-          field, 
-          order: state.sortOrder === 'asc' ? 'desc' : 'asc' 
-        } 
+      dispatch({
+        type: 'SET_SORT',
+        payload: {
+          field,
+          order: state.sortOrder === 'asc' ? 'desc' : 'asc'
+        }
       });
     } else {
       dispatch({ type: 'SET_SORT', payload: { field, order: 'asc' } });
@@ -167,7 +167,7 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
         <FileJson className="h-16 w-16 text-muted-foreground mb-4" />
         <h3 className="text-lg font-medium mb-2">No Documents Found</h3>
         <p className="text-muted-foreground max-w-sm">
-          {state.searchQuery 
+          {state.searchQuery
             ? `No documents match "${state.searchQuery}". Try a different search term.`
             : 'This collection is empty. Add a new document to get started.'}
         </p>
@@ -190,7 +190,7 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
                   />
                 </TableHead>
                 {columns.map((col) => (
-                  <TableHead 
+                  <TableHead
                     key={col}
                     className="cursor-pointer hover:bg-muted/80 transition-colors"
                     onClick={() => handleSort(col)}
@@ -198,7 +198,7 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
                     <div className="flex items-center gap-1">
                       <span className="font-mono text-xs">{col}</span>
                       {state.sortField === col && (
-                        state.sortOrder === 'asc' 
+                        state.sortOrder === 'asc'
                           ? <ChevronUp className="h-3 w-3" />
                           : <ChevronDown className="h-3 w-3" />
                       )}
@@ -210,7 +210,7 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
             </TableHeader>
             <TableBody>
               {state.documents.map((doc) => (
-                <TableRow 
+                <TableRow
                   key={doc._id}
                   className={cn(
                     "doc-row",
@@ -239,14 +239,14 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           className="gap-2"
                           onClick={() => onEditDocument(doc)}
                         >
                           <Edit className="h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           className="gap-2"
                           onClick={() => copyToClipboard(doc)}
                         >
@@ -254,7 +254,7 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
                           Copy
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           className="gap-2 text-destructive"
                           onClick={() => onDeleteDocument(doc)}
                         >
@@ -308,11 +308,11 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          
+
           <span className="px-3 text-sm">
             Page {state.currentPage} of {totalPages}
           </span>
-          
+
           <Button
             variant="outline"
             size="icon"

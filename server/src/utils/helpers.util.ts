@@ -156,10 +156,11 @@ export const isEmpty = (obj: any): boolean => {
 
 /**
  * Retry async function with exponential backoff
+ * Skips retry for permanent errors (auth, DNS, etc.)
  */
 export const retryWithBackoff = async <T>(
   fn: () => Promise<T>,
-  maxRetries: number = 3,
+  maxRetries: number = 2, // Reduced to 2 for faster feedback
   baseDelay: number = 1000
 ): Promise<T> => {
   let lastError: any;
@@ -167,12 +168,27 @@ export const retryWithBackoff = async <T>(
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
-    } catch (error) {
+    } catch (error: any) {
       lastError = error;
-      if (i < maxRetries - 1) {
-        const delay = baseDelay * Math.pow(2, i);
-        await sleep(delay);
+      
+      // Don't retry on permanent errors
+      const isPermanentError = 
+        error.message?.includes('authentication') ||
+        error.message?.includes('ENOTFOUND') ||
+        error.message?.includes('getaddrinfo') ||
+        error.code === 18 || // Auth failed
+        error.code === 13 || // Authorization failed
+        error.message?.includes('IP') ||
+        error.message?.includes('whitelist');
+      
+      if (isPermanentError || i >= maxRetries - 1) {
+        throw lastError;
       }
+      
+      // Exponential backoff
+      const delay = baseDelay * Math.pow(2, i);
+      logError(`Retry attempt ${i + 1}/${maxRetries} after ${delay}ms`, error);
+      await sleep(delay);
     }
   }
 

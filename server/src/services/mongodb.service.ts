@@ -20,16 +20,14 @@ class MongoDBService {
     this.poolSize = parseInt(process.env.CONNECTION_POOL_SIZE || '10');
   }
 
-  /**
-   * Get MongoDB client options
-   */
   private getClientOptions(): MongoClientOptions {
     return {
       maxPoolSize: this.poolSize,
-      minPoolSize: 2,
-      serverSelectionTimeoutMS: this.connectionTimeout,
-      socketTimeoutMS: 60000,
+      minPoolSize: 0, // Allow pool to scale down to 0 for Atlas
+      serverSelectionTimeoutMS: 10000, // 10 seconds for Atlas
+      socketTimeoutMS: 45000, // 45 seconds for Atlas operations
       connectTimeoutMS: this.connectionTimeout,
+      family: 4, // Force IPv4 for better Atlas compatibility
       retryWrites: true,
       retryReads: true,
     };
@@ -86,14 +84,27 @@ class MongoDBService {
 
       let errorMessage = 'Failed to connect to MongoDB';
 
-      if (error.name === 'MongoServerError') {
-        errorMessage = `MongoDB Error: ${error.message}`;
+      // Atlas-specific error handling
+      if (error.message?.includes('IP') || error.message?.includes('whitelist')) {
+        errorMessage = 'Unable to connect to MongoDB cluster. Check IP whitelist and credentials.';
+      } else if (error.message?.includes('ENOTFOUND') || error.message?.includes('getaddrinfo')) {
+        errorMessage = 'DNS resolution failed. Check your connection string and network.';
+      } else if (error.name === 'MongoServerError') {
+        if (error.code === 18) {
+          errorMessage = 'Authentication failed: Invalid username or password';
+        } else if (error.code === 13) {
+          errorMessage = 'Authorization failed: User does not have required permissions';
+        } else {
+          errorMessage = `MongoDB Error: ${error.message}`;
+        }
       } else if (error.name === 'MongoNetworkError') {
-        errorMessage = 'Network error: Unable to reach MongoDB server';
-      } else if (error.message.includes('authentication')) {
+        errorMessage = 'Network error: Unable to reach MongoDB server. Check firewall and IP whitelist.';
+      } else if (error.message?.includes('authentication')) {
         errorMessage = 'Authentication failed: Invalid credentials';
-      } else if (error.message.includes('timeout')) {
-        errorMessage = 'Connection timeout: Server did not respond in time';
+      } else if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
+        errorMessage = 'Connection timeout: Server did not respond in time. Check network and Atlas status.';
+      } else if (error.message?.includes('ECONNREFUSED')) {
+        errorMessage = 'Connection refused: MongoDB server is not accepting connections.';
       }
 
       return { success: false, error: errorMessage };

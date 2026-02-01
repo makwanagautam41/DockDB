@@ -1,20 +1,40 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
-import { Workspace, WorkspaceConnection, Collection, Document } from '@/lib/mockData';
-import { workspaceApi, documentApi } from '@/lib/mockApi';
+import {
+  connectionService,
+  Connection,
+  databaseService,
+  Database,
+  collectionService,
+  Collection as ApiCollection,
+  documentService,
+  Document,
+  PaginationParams,
+} from '@/services';
+
+// Adapted types for frontend
+export interface WorkspaceConnection extends Connection {
+  status: 'connected' | 'disconnected';
+  databases?: Database[];
+  selectedDatabase?: string;
+  collections?: ApiCollection[];
+}
+
+export interface Collection extends ApiCollection {
+  id: string;
+  connectionId: string;
+  databaseName: string;
+}
 
 // State types
 interface AppState {
-  // Workspaces
-  workspaces: Workspace[];
-  activeWorkspace: Workspace | null;
-  isWorkspaceUnlocked: boolean;
-  
-  // Connections within active workspace (connection = database in new model)
+  // Connections (replacing workspaces)
+  connections: WorkspaceConnection[];
   activeConnection: WorkspaceConnection | null;
-  
-  // Navigation (no separate databases layer - collections are on connection)
+
+  // Navigation
+  selectedDatabase: string | null;
   selectedCollection: Collection | null;
-  
+
   // Documents
   documents: Document[];
   selectedDocument: Document | null;
@@ -24,30 +44,29 @@ interface AppState {
   searchQuery: string;
   sortField: string | null;
   sortOrder: 'asc' | 'desc';
-  
+
   // UI State
   isLoading: boolean;
   isSidebarOpen: boolean;
   isDocumentEditorOpen: boolean;
   isQueryEditorOpen: boolean;
   isConnectionModalOpen: boolean;
-  isWorkspaceModalOpen: boolean;
   activeView: 'documents' | 'query' | 'stats';
-  
+
   // Errors
   error: string | null;
 }
 
 // Action types
 type Action =
-  | { type: 'SET_WORKSPACES'; payload: Workspace[] }
-  | { type: 'ADD_WORKSPACE'; payload: Workspace }
-  | { type: 'UPDATE_WORKSPACE'; payload: Workspace }
-  | { type: 'DELETE_WORKSPACE'; payload: string }
-  | { type: 'SET_ACTIVE_WORKSPACE'; payload: Workspace | null }
-  | { type: 'SET_WORKSPACE_UNLOCKED'; payload: boolean }
-  | { type: 'SET_ACTIVE_CONNECTION'; payload: WorkspaceConnection | null }
+  | { type: 'SET_CONNECTIONS'; payload: WorkspaceConnection[] }
+  | { type: 'ADD_CONNECTION'; payload: WorkspaceConnection }
   | { type: 'UPDATE_CONNECTION'; payload: WorkspaceConnection }
+  | { type: 'DELETE_CONNECTION'; payload: string }
+  | { type: 'SET_ACTIVE_CONNECTION'; payload: WorkspaceConnection | null }
+  | { type: 'SET_DATABASES'; payload: Database[] }
+  | { type: 'SELECT_DATABASE'; payload: string | null }
+  | { type: 'SET_COLLECTIONS'; payload: ApiCollection[] }
   | { type: 'SELECT_COLLECTION'; payload: Collection | null }
   | { type: 'SET_DOCUMENTS'; payload: { documents: Document[]; total: number } }
   | { type: 'ADD_DOCUMENT'; payload: Document }
@@ -65,14 +84,12 @@ type Action =
   | { type: 'SET_DOCUMENT_EDITOR_OPEN'; payload: boolean }
   | { type: 'SET_QUERY_EDITOR_OPEN'; payload: boolean }
   | { type: 'SET_CONNECTION_MODAL_OPEN'; payload: boolean }
-  | { type: 'SET_WORKSPACE_MODAL_OPEN'; payload: boolean }
   | { type: 'SET_ACTIVE_VIEW'; payload: 'documents' | 'query' | 'stats' };
 
 const initialState: AppState = {
-  workspaces: [],
-  activeWorkspace: null,
-  isWorkspaceUnlocked: false,
+  connections: [],
   activeConnection: null,
+  selectedDatabase: null,
   selectedCollection: null,
   documents: [],
   selectedDocument: null,
@@ -87,71 +104,69 @@ const initialState: AppState = {
   isDocumentEditorOpen: false,
   isQueryEditorOpen: false,
   isConnectionModalOpen: false,
-  isWorkspaceModalOpen: false,
   activeView: 'documents',
   error: null,
 };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case 'SET_WORKSPACES':
-      return { ...state, workspaces: action.payload };
-    case 'ADD_WORKSPACE':
-      return { ...state, workspaces: [...state.workspaces, action.payload] };
-    case 'UPDATE_WORKSPACE':
-      return {
-        ...state,
-        workspaces: state.workspaces.map(w =>
-          w.id === action.payload.id ? action.payload : w
-        ),
-        activeWorkspace:
-          state.activeWorkspace?.id === action.payload.id
-            ? action.payload
-            : state.activeWorkspace,
-      };
-    case 'DELETE_WORKSPACE':
-      return {
-        ...state,
-        workspaces: state.workspaces.filter(w => w.id !== action.payload),
-        activeWorkspace:
-          state.activeWorkspace?.id === action.payload
-            ? null
-            : state.activeWorkspace,
-        isWorkspaceUnlocked:
-          state.activeWorkspace?.id === action.payload
-            ? false
-            : state.isWorkspaceUnlocked,
-      };
-    case 'SET_ACTIVE_WORKSPACE':
-      return {
-        ...state,
-        activeWorkspace: action.payload,
-        isWorkspaceUnlocked: false,
-        activeConnection: null,
-        selectedCollection: null,
-        documents: [],
-      };
-    case 'SET_WORKSPACE_UNLOCKED':
-      return { ...state, isWorkspaceUnlocked: action.payload };
-    case 'SET_ACTIVE_CONNECTION':
-      return {
-        ...state,
-        activeConnection: action.payload,
-        selectedCollection: null,
-        documents: [],
-      };
+    case 'SET_CONNECTIONS':
+      return { ...state, connections: action.payload };
+    case 'ADD_CONNECTION':
+      return { ...state, connections: [...state.connections, action.payload] };
     case 'UPDATE_CONNECTION':
-      if (!state.activeWorkspace) return state;
-      const updatedConnections = state.activeWorkspace.connections.map(c =>
-        c.id === action.payload.id ? action.payload : c
-      );
       return {
         ...state,
-        activeWorkspace: { ...state.activeWorkspace, connections: updatedConnections },
+        connections: state.connections.map(c =>
+          c.id === action.payload.id ? action.payload : c
+        ),
         activeConnection:
           state.activeConnection?.id === action.payload.id
             ? action.payload
             : state.activeConnection,
+      };
+    case 'DELETE_CONNECTION':
+      return {
+        ...state,
+        connections: state.connections.filter(c => c.id !== action.payload),
+        activeConnection:
+          state.activeConnection?.id === action.payload
+            ? null
+            : state.activeConnection,
+      };
+    case 'SET_ACTIVE_CONNECTION':
+      return {
+        ...state,
+        activeConnection: action.payload,
+        selectedDatabase: null,
+        selectedCollection: null,
+        documents: [],
+      };
+    case 'SET_DATABASES':
+      if (!state.activeConnection) return state;
+      return {
+        ...state,
+        activeConnection: {
+          ...state.activeConnection,
+          databases: action.payload,
+        },
+      };
+    case 'SELECT_DATABASE':
+      return {
+        ...state,
+        selectedDatabase: action.payload,
+        selectedCollection: null,
+        documents: [],
+        currentPage: 1,
+      };
+    case 'SET_COLLECTIONS':
+      if (!state.activeConnection) return state;
+      return {
+        ...state,
+        activeConnection: {
+          ...state.activeConnection,
+          collections: action.payload,
+        },
       };
     case 'SELECT_COLLECTION':
       return {
@@ -221,8 +236,6 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, isQueryEditorOpen: action.payload };
     case 'SET_CONNECTION_MODAL_OPEN':
       return { ...state, isConnectionModalOpen: action.payload };
-    case 'SET_WORKSPACE_MODAL_OPEN':
-      return { ...state, isWorkspaceModalOpen: action.payload };
     case 'SET_ACTIVE_VIEW':
       return { ...state, activeView: action.payload };
     default:
@@ -234,29 +247,28 @@ function reducer(state: AppState, action: Action): AppState {
 interface AppContextType {
   state: AppState;
   dispatch: React.Dispatch<Action>;
-  
-  // Workspace actions
-  loadWorkspaces: () => Promise<void>;
-  createWorkspace: (workspace: { name: string; password: string; color: string }) => Promise<void>;
-  unlockWorkspace: (workspaceId: string, password: string) => Promise<boolean>;
-  lockWorkspace: () => void;
-  deleteWorkspace: (id: string) => Promise<void>;
-  
+
   // Connection actions
-  addConnection: (connection: { name: string; uri: string }) => Promise<void>;
+  loadConnections: () => Promise<void>;
+  addConnection: (connection: { name: string; connectionString: string; color?: string }) => Promise<void>;
   connectToDatabase: (connectionId: string) => Promise<void>;
-  disconnectFromDatabase: (connectionId: string) => Promise<void>;
+  disconnectFromDatabase: (connectionId: string) => void;
   deleteConnection: (connectionId: string) => Promise<void>;
-  
+
+  // Database actions
+  loadDatabases: (connectionId: string) => Promise<void>;
+  selectDatabase: (databaseName: string) => Promise<void>;
+
   // Collection actions
+  loadCollections: (connectionId: string, databaseName: string) => Promise<void>;
   selectCollection: (collection: Collection) => Promise<void>;
-  
+
   // Document actions
   loadDocuments: () => Promise<void>;
   createDocument: (document: Omit<Document, '_id'>) => Promise<void>;
   updateDocument: (documentId: string, updates: Partial<Document>) => Promise<void>;
   deleteDocument: (documentId: string) => Promise<void>;
-  
+
   // UI actions
   toggleSidebar: () => void;
   openDocumentEditor: (document?: Document) => void;
@@ -268,170 +280,231 @@ const AppContext = createContext<AppContextType | null>(null);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Load workspaces on mount
-  const loadWorkspaces = useCallback(async () => {
+  // Load connections on mount
+  const loadConnections = useCallback(async () => {
     dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      const response = await workspaceApi.getAll();
-      if (response.success && response.data) {
-        dispatch({ type: 'SET_WORKSPACES', payload: response.data });
-      }
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to load workspaces' });
+      const connections = await connectionService.listConnections();
+      const mappedConnections: WorkspaceConnection[] = connections.map(conn => ({
+        ...conn,
+        status: 'disconnected' as const,
+      }));
+      dispatch({ type: 'SET_CONNECTIONS', payload: mappedConnections });
+    } catch (error: any) {
+      console.error('Failed to load connections:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to load connections' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, []);
 
   useEffect(() => {
-    loadWorkspaces();
-  }, [loadWorkspaces]);
-
-  // Workspace actions
-  const createWorkspace = useCallback(async (workspace: { name: string; password: string; color: string }) => {
-    const response = await workspaceApi.create(workspace);
-    if (response.success && response.data) {
-      dispatch({ type: 'ADD_WORKSPACE', payload: response.data });
-      dispatch({ type: 'SET_ACTIVE_WORKSPACE', payload: response.data });
-      dispatch({ type: 'SET_WORKSPACE_UNLOCKED', payload: true });
-    } else {
-      throw new Error(response.error || 'Failed to create workspace');
-    }
-  }, []);
-
-  const unlockWorkspace = useCallback(async (workspaceId: string, password: string): Promise<boolean> => {
-    const response = await workspaceApi.unlock(workspaceId, password);
-    if (response.success && response.data) {
-      dispatch({ type: 'SET_ACTIVE_WORKSPACE', payload: response.data });
-      dispatch({ type: 'SET_WORKSPACE_UNLOCKED', payload: true });
-      return true;
-    }
-    return false;
-  }, []);
-
-  const lockWorkspace = useCallback(() => {
-    dispatch({ type: 'SET_WORKSPACE_UNLOCKED', payload: false });
-    dispatch({ type: 'SET_ACTIVE_CONNECTION', payload: null });
-  }, []);
-
-  const deleteWorkspace = useCallback(async (id: string) => {
-    const response = await workspaceApi.delete(id);
-    if (response.success) {
-      dispatch({ type: 'DELETE_WORKSPACE', payload: id });
-    } else {
-      throw new Error(response.error || 'Failed to delete workspace');
-    }
-  }, []);
+    loadConnections();
+  }, [loadConnections]);
 
   // Connection actions
-  const addConnection = useCallback(async (connection: { name: string; uri: string }) => {
-    if (!state.activeWorkspace) return;
-    
-    const response = await workspaceApi.addConnection(state.activeWorkspace.id, connection);
-    if (response.success && response.data) {
-      // Reload workspace to get updated connections
-      const wsResponse = await workspaceApi.unlock(state.activeWorkspace.id, '');
-      // Note: This won't work because we don't store the password in memory
-      // Instead, let's manually update the state
-      const updatedWorkspace = {
-        ...state.activeWorkspace,
-        connections: [...state.activeWorkspace.connections, response.data],
+  const addConnection = useCallback(async (connection: { name: string; connectionString: string; color?: string }) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      // First test the connection
+      await connectionService.testConnection(connection.connectionString);
+
+      // If successful, save it
+      const newConnection = await connectionService.saveConnection(connection);
+      const mappedConnection: WorkspaceConnection = {
+        ...newConnection,
+        status: 'disconnected',
       };
-      dispatch({ type: 'UPDATE_WORKSPACE', payload: updatedWorkspace });
-    } else {
-      throw new Error(response.error || 'Failed to add connection');
+      dispatch({ type: 'ADD_CONNECTION', payload: mappedConnection });
+    } catch (error: any) {
+      console.error('Failed to add connection:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to add connection' });
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [state.activeWorkspace]);
+  }, []);
 
   const connectToDatabase = useCallback(async (connectionId: string) => {
-    if (!state.activeWorkspace) return;
-    
     dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      const response = await workspaceApi.connectToDatabase(state.activeWorkspace.id, connectionId);
-      if (response.success && response.data) {
-        dispatch({ type: 'UPDATE_CONNECTION', payload: response.data });
-        dispatch({ type: 'SET_ACTIVE_CONNECTION', payload: response.data });
-        // Collections are now directly on the connection, no need to load databases
-      } else {
-        dispatch({ type: 'SET_ERROR', payload: response.error || 'Connection failed' });
-      }
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Connection failed' });
+      const connection = state.connections.find(c => c.id === connectionId);
+      if (!connection) throw new Error('Connection not found');
+
+      // Load databases for this connection
+      const { databases } = await databaseService.listDatabases(connectionId);
+
+      const updatedConnection: WorkspaceConnection = {
+        ...connection,
+        status: 'connected',
+        databases,
+      };
+
+      dispatch({ type: 'UPDATE_CONNECTION', payload: updatedConnection });
+      dispatch({ type: 'SET_ACTIVE_CONNECTION', payload: updatedConnection });
+    } catch (error: any) {
+      console.error('Failed to connect:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Connection failed' });
+      throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [state.activeWorkspace]);
+  }, [state.connections]);
 
-  const disconnectFromDatabase = useCallback(async (connectionId: string) => {
-    if (!state.activeWorkspace) return;
-    
-    const response = await workspaceApi.disconnectFromDatabase(state.activeWorkspace.id, connectionId);
-    if (response.success && response.data) {
-      dispatch({ type: 'UPDATE_CONNECTION', payload: response.data });
+  const disconnectFromDatabase = useCallback((connectionId: string) => {
+    const connection = state.connections.find(c => c.id === connectionId);
+    if (connection) {
+      const updatedConnection: WorkspaceConnection = {
+        ...connection,
+        status: 'disconnected',
+        databases: undefined,
+        collections: undefined,
+      };
+      dispatch({ type: 'UPDATE_CONNECTION', payload: updatedConnection });
       if (state.activeConnection?.id === connectionId) {
         dispatch({ type: 'SET_ACTIVE_CONNECTION', payload: null });
       }
     }
-  }, [state.activeWorkspace, state.activeConnection]);
+  }, [state.connections, state.activeConnection]);
 
   const deleteConnection = useCallback(async (connectionId: string) => {
-    if (!state.activeWorkspace) return;
-    
-    const response = await workspaceApi.deleteConnection(state.activeWorkspace.id, connectionId);
-    if (response.success) {
-      const updatedWorkspace = {
-        ...state.activeWorkspace,
-        connections: state.activeWorkspace.connections.filter(c => c.id !== connectionId),
-      };
-      dispatch({ type: 'UPDATE_WORKSPACE', payload: updatedWorkspace });
-      
-      if (state.activeConnection?.id === connectionId) {
-        dispatch({ type: 'SET_ACTIVE_CONNECTION', payload: null });
-      }
-    } else {
-      throw new Error(response.error || 'Failed to delete connection');
-    }
-  }, [state.activeWorkspace, state.activeConnection]);
-
-  // Collection actions
-  const selectCollection = useCallback(async (collection: Collection) => {
-    dispatch({ type: 'SELECT_COLLECTION', payload: collection });
     dispatch({ type: 'SET_LOADING', payload: true });
-    
+    dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      const response = await documentApi.getAll(collection.id, {
-        page: 1,
-        limit: state.pageSize,
-      });
-      if (response.success && response.data) {
-        dispatch({ type: 'SET_DOCUMENTS', payload: response.data });
-      }
+      await connectionService.deleteConnection(connectionId);
+      dispatch({ type: 'DELETE_CONNECTION', payload: connectionId });
+    } catch (error: any) {
+      console.error('Failed to delete connection:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to delete connection' });
+      throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [state.pageSize]);
+  }, []);
+
+  // Database actions
+  const loadDatabases = useCallback(async (connectionId: string) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      const { databases } = await databaseService.listDatabases(connectionId);
+      dispatch({ type: 'SET_DATABASES', payload: databases });
+    } catch (error: any) {
+      console.error('Failed to load databases:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to load databases' });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, []);
+
+  const selectDatabase = useCallback(async (databaseName: string) => {
+    if (!state.activeConnection) return;
+
+    dispatch({ type: 'SELECT_DATABASE', payload: databaseName });
+
+    // Load collections for this database
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      const apiCollections = await collectionService.listCollections(state.activeConnection.id, databaseName);
+
+      // Map API collections to include required fields
+      const collections: ApiCollection[] = apiCollections.map((col) => ({
+        ...col,
+        databaseName,
+        documentCount: 0,
+      }));
+
+      dispatch({ type: 'SET_COLLECTIONS', payload: collections });
+    } catch (error: any) {
+      console.error('Failed to load collections:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to load collections' });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, [state.activeConnection]);
+
+  // Collection actions
+  const loadCollections = useCallback(async (connectionId: string, databaseName: string) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      const apiCollections = await collectionService.listCollections(connectionId, databaseName);
+
+      // Map API collections to include required fields
+      const collections: ApiCollection[] = apiCollections.map((col) => ({
+        ...col,
+        databaseName,
+        documentCount: 0, // Will be loaded separately if needed
+      }));
+
+      dispatch({ type: 'SET_COLLECTIONS', payload: collections });
+    } catch (error: any) {
+      console.error('Failed to load collections:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to load collections' });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, []);
+
+  const selectCollection = useCallback(async (collection: Collection) => {
+    dispatch({ type: 'SELECT_COLLECTION', payload: collection });
+    // Documents will be loaded by the effect
+  }, []);
 
   // Document actions
   const loadDocuments = useCallback(async () => {
-    if (!state.selectedCollection) return;
-    
+    if (!state.activeConnection || !state.selectedDatabase || !state.selectedCollection) return;
+
     dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
     try {
-      const response = await documentApi.getAll(state.selectedCollection.id, {
+      const params: PaginationParams = {
         page: state.currentPage,
         limit: state.pageSize,
-        search: state.searchQuery,
-        sortField: state.sortField || undefined,
-        sortOrder: state.sortOrder,
-      });
-      if (response.success && response.data) {
-        dispatch({ type: 'SET_DOCUMENTS', payload: response.data });
+      };
+
+      if (state.searchQuery) {
+        params.filter = JSON.stringify({ $text: { $search: state.searchQuery } });
       }
+
+      if (state.sortField) {
+        params.sort = JSON.stringify({ [state.sortField]: state.sortOrder === 'asc' ? 1 : -1 });
+      }
+
+      const result = await documentService.listDocuments(
+        state.activeConnection.id,
+        state.selectedDatabase,
+        state.selectedCollection.name,
+        params
+      );
+
+      dispatch({
+        type: 'SET_DOCUMENTS',
+        payload: {
+          documents: result.documents,
+          total: result.pagination.total
+        }
+      });
+    } catch (error: any) {
+      console.error('Failed to load documents:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to load documents' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [state.selectedCollection, state.currentPage, state.pageSize, state.searchQuery, state.sortField, state.sortOrder]);
+  }, [
+    state.activeConnection,
+    state.selectedDatabase,
+    state.selectedCollection,
+    state.currentPage,
+    state.pageSize,
+    state.searchQuery,
+    state.sortField,
+    state.sortOrder,
+  ]);
 
   useEffect(() => {
     if (state.selectedCollection) {
@@ -440,37 +513,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [state.currentPage, state.pageSize, state.searchQuery, state.sortField, state.sortOrder, loadDocuments]);
 
   const createDocument = useCallback(async (document: Omit<Document, '_id'>) => {
-    if (!state.selectedCollection) return;
-    
-    const response = await documentApi.create(state.selectedCollection.id, document);
-    if (response.success && response.data) {
-      dispatch({ type: 'ADD_DOCUMENT', payload: response.data });
-    } else {
-      throw new Error(response.error || 'Failed to create document');
+    if (!state.activeConnection || !state.selectedDatabase || !state.selectedCollection) return;
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      const result = await documentService.createDocument(
+        state.activeConnection.id,
+        state.selectedDatabase,
+        state.selectedCollection.name,
+        document
+      );
+      dispatch({ type: 'ADD_DOCUMENT', payload: result.document });
+      // Reload to get accurate count and pagination
+      await loadDocuments();
+    } catch (error: any) {
+      console.error('Failed to create document:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to create document' });
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [state.selectedCollection]);
+  }, [state.activeConnection, state.selectedDatabase, state.selectedCollection, loadDocuments]);
 
   const updateDocument = useCallback(async (documentId: string, updates: Partial<Document>) => {
-    if (!state.selectedCollection) return;
-    
-    const response = await documentApi.update(state.selectedCollection.id, documentId, updates);
-    if (response.success && response.data) {
-      dispatch({ type: 'UPDATE_DOCUMENT', payload: response.data });
-    } else {
-      throw new Error(response.error || 'Failed to update document');
+    if (!state.activeConnection || !state.selectedDatabase || !state.selectedCollection) return;
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      const { _id, ...updateData } = updates;
+      const result = await documentService.replaceDocument(
+        state.activeConnection.id,
+        state.selectedDatabase,
+        state.selectedCollection.name,
+        documentId,
+        updateData
+      );
+      dispatch({ type: 'UPDATE_DOCUMENT', payload: result });
+    } catch (error: any) {
+      console.error('Failed to update document:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to update document' });
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [state.selectedCollection]);
+  }, [state.activeConnection, state.selectedDatabase, state.selectedCollection]);
 
   const deleteDocument = useCallback(async (documentId: string) => {
-    if (!state.selectedCollection) return;
-    
-    const response = await documentApi.delete(state.selectedCollection.id, documentId);
-    if (response.success) {
+    if (!state.activeConnection || !state.selectedDatabase || !state.selectedCollection) return;
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+    try {
+      await documentService.deleteDocument(
+        state.activeConnection.id,
+        state.selectedDatabase,
+        state.selectedCollection.name,
+        documentId
+      );
       dispatch({ type: 'DELETE_DOCUMENT', payload: documentId });
-    } else {
-      throw new Error(response.error || 'Failed to delete document');
+    } catch (error: any) {
+      console.error('Failed to delete document:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to delete document' });
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [state.selectedCollection]);
+  }, [state.activeConnection, state.selectedDatabase, state.selectedCollection]);
 
   // UI actions
   const toggleSidebar = useCallback(() => {
@@ -490,15 +600,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const value: AppContextType = {
     state,
     dispatch,
-    loadWorkspaces,
-    createWorkspace,
-    unlockWorkspace,
-    lockWorkspace,
-    deleteWorkspace,
+    loadConnections,
     addConnection,
     connectToDatabase,
     disconnectFromDatabase,
     deleteConnection,
+    loadDatabases,
+    selectDatabase,
+    loadCollections,
     selectCollection,
     loadDocuments,
     createDocument,

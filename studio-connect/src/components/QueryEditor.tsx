@@ -12,7 +12,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { queryApi } from '@/lib/mockApi';
 import { exampleQueries } from '@/lib/mockData';
-import { Document } from '@/lib/mockData';
+import { Document } from '@/services';
 import { toast } from 'sonner';
 
 export const QueryEditor: React.FC = () => {
@@ -25,10 +25,10 @@ export const QueryEditor: React.FC = () => {
   const handleRunQuery = async () => {
     setIsRunning(true);
     setError(null);
-    
+
     try {
       const response = await queryApi.execute(query);
-      
+
       if (response.success && response.data) {
         setResults(response.data.results);
         setExecutionTime(response.data.executionTime);
@@ -92,8 +92,8 @@ export const QueryEditor: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
-          
-          <Button 
+
+          <Button
             onClick={handleRunQuery}
             disabled={isRunning}
             className="gap-2"
@@ -153,7 +153,7 @@ export const QueryEditor: React.FC = () => {
               </span>
             )}
           </div>
-          
+
           {results && results.length > 0 && (
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={copyResults} className="gap-1">

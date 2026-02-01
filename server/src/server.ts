@@ -3,17 +3,17 @@
  * Starts the Express server and handles graceful shutdown
  */
 
-import { createApp } from './app';
-import { appConfig, validateConfig } from './config/app.config';
-import { logInfo, logError } from './utils/logger.util';
-import mongodbService from './services/mongodb.service';
+import { createApp } from "./app";
+import { appConfig, validateConfig } from "./config/app.config";
+import { logInfo, logError } from "./utils/logger.util";
+import mongodbService from "./services/mongodb.service";
 
 // Validate configuration
 try {
   validateConfig();
-  logInfo('Configuration validated successfully');
+  logInfo("Configuration validated successfully");
 } catch (error: any) {
-  logError('Configuration validation failed', error);
+  logError("Configuration validation failed", error);
   process.exit(1);
 }
 
@@ -40,42 +40,42 @@ const gracefulShutdown = async (signal: string) => {
 
   // Stop accepting new connections
   server.close(async () => {
-    logInfo('HTTP server closed');
+    logInfo("HTTP server closed");
 
     try {
       // Close all MongoDB connections
       await mongodbService.closeAllConnections();
-      logInfo('All MongoDB connections closed');
+      logInfo("All MongoDB connections closed");
 
-      logInfo('Graceful shutdown completed');
+      logInfo("Graceful shutdown completed");
       process.exit(0);
     } catch (error) {
-      logError('Error during graceful shutdown', error);
+      logError("Error during graceful shutdown", error);
       process.exit(1);
     }
   });
 
   // Force shutdown after 30 seconds
   setTimeout(() => {
-    logError('Forced shutdown after timeout');
+    logError("Forced shutdown after timeout");
     process.exit(1);
   }, 30000);
 };
 
 // Handle shutdown signals
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (error: Error) => {
-  logError('Uncaught Exception', error);
-  gracefulShutdown('uncaughtException');
+process.on("uncaughtException", (error: Error) => {
+  logError("Uncaught Exception", error);
+  gracefulShutdown("uncaughtException");
 });
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-  logError('Unhandled Rejection', { reason, promise });
-  gracefulShutdown('unhandledRejection');
+process.on("unhandledRejection", (reason: any, promise: Promise<any>) => {
+  logError("Unhandled Rejection", { reason, promise });
+  gracefulShutdown("unhandledRejection");
 });
 
 export default server;

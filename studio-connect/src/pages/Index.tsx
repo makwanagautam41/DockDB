@@ -7,12 +7,12 @@ import { DocumentTable } from '@/components/DocumentTable';
 import { DocumentEditor } from '@/components/DocumentEditor';
 import { QueryEditor } from '@/components/QueryEditor';
 import { StatsPanel } from '@/components/StatsPanel';
-import { ConnectionModal, ConnectionManager, WorkspaceManager, WorkspaceModal } from '@/components/ConnectionManager';
+import { ConnectionModal, ConnectionManager } from '@/components/ConnectionManager';
 import { SearchModal } from '@/components/SearchModal';
 import { Breadcrumb } from '@/components/Breadcrumb';
 import { ContentToolbar } from '@/components/ContentToolbar';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { Document } from '@/lib/mockData';
+import { Document } from '@/services';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
@@ -79,17 +79,17 @@ const MainContent: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      <Header 
+      <Header
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
       />
-      
+
       {/* Mobile Sidebar */}
-      <MobileSidebar 
-        open={isMobileSidebarOpen} 
-        onOpenChange={setIsMobileSidebarOpen} 
+      <MobileSidebar
+        open={isMobileSidebarOpen}
+        onOpenChange={setIsMobileSidebarOpen}
       />
-      
+
       <div className="flex-1 flex overflow-hidden">
         {/* Desktop Sidebar */}
         <aside className={cn(
@@ -102,20 +102,18 @@ const MainContent: React.FC = () => {
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Show workspace manager if no workspace is unlocked */}
-          {!state.activeWorkspace || !state.isWorkspaceUnlocked ? (
-            <WorkspaceManager />
-          ) : state.activeConnection ? (
+          {/* Show connection manager if no connection is active */}
+          {state.activeConnection ? (
             state.selectedCollection ? (
               <>
                 <Breadcrumb />
-                <ContentToolbar 
+                <ContentToolbar
                   onNewDocument={handleNewDocument}
                   onOpenSearch={() => setIsSearchOpen(true)}
                 />
-                
+
                 {state.activeView === 'documents' && (
-                  <DocumentTable 
+                  <DocumentTable
                     onEditDocument={handleEditDocument}
                     onDeleteDocument={(doc) => setDeletingDocument(doc)}
                   />
@@ -152,19 +150,14 @@ const MainContent: React.FC = () => {
         }}
       />
 
-      <SearchModal 
-        isOpen={isSearchOpen} 
-        onClose={() => setIsSearchOpen(false)} 
+      <SearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
       />
 
       <ConnectionModal
         isOpen={state.isConnectionModalOpen}
         onClose={() => dispatch({ type: 'SET_CONNECTION_MODAL_OPEN', payload: false })}
-      />
-
-      <WorkspaceModal
-        isOpen={state.isWorkspaceModalOpen}
-        onClose={() => dispatch({ type: 'SET_WORKSPACE_MODAL_OPEN', payload: false })}
       />
 
       {/* Delete Document Confirmation */}

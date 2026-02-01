@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Document } from '@/lib/mockData';
+import { Document } from '@/services';
 import { toast } from 'sonner';
 
 interface DocumentEditorProps {
@@ -52,7 +52,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       const parsed = JSON.parse(content);
       setError(null);
       setIsSaving(true);
-      
+
       await onSave(parsed);
       toast.success(isNew ? 'Document created' : 'Document updated');
       onClose();
@@ -74,7 +74,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
   const handleDelete = async () => {
     if (!document || !onDelete) return;
-    
+
     try {
       await onDelete(document._id);
       toast.success('Document deleted');
@@ -97,9 +97,9 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 <Copy className="h-4 w-4" />
               </Button>
               {!isNew && onDelete && (
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="text-destructive hover:text-destructive"
                   onClick={handleDelete}
                 >
