@@ -231,9 +231,9 @@ export const QueryEditor: React.FC = () => {
 
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Query Editor */}
-      <div className="flex-1 flex flex-col border-b border-border">
+      <div className="flex-1 flex flex-col border-b border-border min-h-0">
         {/* Toolbar */}
         <div className="p-3 border-b border-border flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">

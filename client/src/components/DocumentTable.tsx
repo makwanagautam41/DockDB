@@ -176,13 +176,13 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col">
-      {/* Table */}
-      <div className="flex-1 overflow-auto custom-scrollbar">
-        <div className="border border-border rounded-lg overflow-hidden m-4">
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Table Container - takes remaining space and scrolls */}
+      <div className="flex-1 overflow-auto custom-scrollbar p-4 pb-0">
+        <div className="border border-border rounded-lg overflow-hidden">
           <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
+            <TableHeader className="sticky top-0 z-10 bg-muted/50">
+              <TableRow>
                 <TableHead className="w-12">
                   <Checkbox
                     checked={selectedRows.size === state.documents.length && state.documents.length > 0}
@@ -271,8 +271,8 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
         </div>
       </div>
 
-      {/* Pagination */}
-      <div className="border-t border-border p-4 flex items-center justify-between bg-card">
+      {/* Pagination - Fixed at bottom */}
+      <div className="shrink-0 border-t border-border p-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-card">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>Showing</span>
           <Select value={String(state.pageSize)} onValueChange={handlePageSizeChange}>
@@ -309,7 +309,7 @@ export const DocumentTable: React.FC<DocumentTableProps> = ({
             <ChevronLeft className="h-4 w-4" />
           </Button>
 
-          <span className="px-3 text-sm">
+          <span className="px-3 text-sm whitespace-nowrap">
             Page {state.currentPage} of {totalPages}
           </span>
 

@@ -99,7 +99,7 @@ export const StatsPanel: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 p-6 overflow-auto custom-scrollbar">
+    <div className="flex-1 p-6 overflow-auto custom-scrollbar min-h-0">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
