@@ -73,6 +73,7 @@ export const QueryEditor: React.FC = () => {
   const [savedQueries, setSavedQueries] = useState<any[]>([]);
   const [queryHistory, setQueryHistory] = useState<any[]>([]);
   const [deletingQueryId, setDeletingQueryId] = useState<string | null>(null);
+  const [showMobileResults, setShowMobileResults] = useState(false);
 
   // Load saved queries and history on mount
   useEffect(() => {
@@ -142,6 +143,11 @@ export const QueryEditor: React.FC = () => {
       setResults(response.result);
       setExecutionTime(response.executionTime);
       toast.success(`Query completed in ${response.executionTime}ms`);
+
+      // Show results modal on mobile
+      if (window.innerWidth < 768) {
+        setShowMobileResults(true);
+      }
 
       // Reload history
       loadQueryHistory();
@@ -299,10 +305,10 @@ export const QueryEditor: React.FC = () => {
               onClick={() => setIsSaveDialogOpen(true)}
               variant="outline"
               size="sm"
-              className="gap-2"
+              className="gap-2 hidden sm:flex"
             >
               <Save className="h-4 w-4" />
-              Save Query
+              <span className="hidden md:inline">Save Query</span>
             </Button>
 
             <Button
@@ -313,15 +319,27 @@ export const QueryEditor: React.FC = () => {
               {isRunning ? (
                 <>
                   <div className="spinner" />
-                  Running...
+                  <span className="hidden sm:inline">Running...</span>
                 </>
               ) : (
                 <>
                   <Play className="h-4 w-4" />
-                  Run Query
+                  <span className="hidden sm:inline">Run Query</span>
                 </>
               )}
             </Button>
+
+            {/* Mobile View Results Button */}
+            {results && (
+              <Button
+                onClick={() => setShowMobileResults(true)}
+                variant="outline"
+                className="gap-2 md:hidden"
+              >
+                <FileJson className="h-4 w-4" />
+                View Results
+              </Button>
+            )}
           </div>
         </div>
 
@@ -359,8 +377,8 @@ export const QueryEditor: React.FC = () => {
         </div>
       </div>
 
-      {/* Results Panel */}
-      <div className="flex-1 flex flex-col min-h-[200px]">
+      {/* Results Panel - Hidden on Mobile */}
+      <div className="hidden md:flex flex-1 flex-col min-h-[200px]">
         {/* Results Header */}
         <div className="p-3 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -486,6 +504,82 @@ export const QueryEditor: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Mobile Results Dialog */}
+      <Dialog open={showMobileResults} onOpenChange={setShowMobileResults}>
+        <DialogContent className="max-w-[95vw] h-[90vh] flex flex-col p-0">
+          <DialogHeader className="p-4 border-b">
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span>Query Results</span>
+                {executionTime !== null && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {executionTime}ms
+                  </span>
+                )}
+              </div>
+            </DialogTitle>
+            {results && (
+              <DialogDescription className="flex items-center gap-2 mt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(results, null, 2));
+                    toast.success('Results copied to clipboard');
+                  }}
+                  className="gap-1"
+                >
+                  <Copy className="h-3 w-3" />
+                  Copy
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'query-results.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success('Results downloaded');
+                  }}
+                  className="gap-1"
+                >
+                  <Download className="h-3 w-3" />
+                  Export
+                </Button>
+              </DialogDescription>
+            )}
+          </DialogHeader>
+
+          <ScrollArea className="flex-1 p-4">
+            {error ? (
+              <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-destructive">Query Error</p>
+                  <p className="text-sm text-destructive/80 mt-1">{error}</p>
+                </div>
+              </div>
+            ) : results === null ? (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <FileJson className="h-12 w-12 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">
+                  No results to display
+                </p>
+              </div>
+            ) : (
+              <pre className="text-xs font-mono whitespace-pre-wrap">
+                {JSON.stringify(results, null, 2)}
+              </pre>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
