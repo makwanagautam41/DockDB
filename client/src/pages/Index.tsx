@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { DatabaseSidebar } from '@/components/DatabaseSidebar';
@@ -33,6 +33,61 @@ const MainContent: React.FC = () => {
   const [isNewDocument, setIsNewDocument] = useState(false);
   const [deletingDocument, setDeletingDocument] = useState<Document | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Resizable sidebar state
+  const [sidebarWidth, setSidebarWidth] = useState(256); // 256px = w-64
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Disable right-click context menu
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    return () => document.removeEventListener('contextmenu', handleContextMenu);
+  }, []);
+
+  // Reload confirmation
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'Are you sure you want to leave? Any unsaved changes will be lost.';
+      return e.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Handle sidebar resize
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const newWidth = e.clientX;
+      // Min width: 200px, Max width: 500px
+      if (newWidth >= 200 && newWidth <= 500) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   useKeyboardShortcuts({
     onSearch: () => setIsSearchOpen(true),
@@ -92,13 +147,29 @@ const MainContent: React.FC = () => {
       />
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Desktop Sidebar */}
-        <aside className={cn(
-          "w-64 border-r border-border bg-sidebar shrink-0 transition-all duration-300",
-          "hidden md:block",
-          !state.isSidebarOpen && "md:w-0 md:overflow-hidden"
-        )}>
+        {/* Desktop Sidebar with Resize Handle */}
+        <aside
+          ref={sidebarRef}
+          className={cn(
+            "border-r border-border bg-sidebar shrink-0 transition-all duration-300 relative",
+            "hidden md:block",
+            !state.isSidebarOpen && "md:w-0 md:overflow-hidden"
+          )}
+          style={{
+            width: state.isSidebarOpen ? `${sidebarWidth}px` : '0px'
+          }}
+        >
           <DatabaseSidebar />
+
+          {/* Resize Handle */}
+          {state.isSidebarOpen && (
+            <div
+              className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/50 transition-colors group"
+              onMouseDown={() => setIsResizing(true)}
+            >
+              <div className="absolute top-1/2 right-0 transform translate-x-1/2 -translate-y-1/2 w-1 h-12 bg-border group-hover:bg-primary rounded-full transition-colors" />
+            </div>
+          )}
         </aside>
 
         {/* Main Content */}

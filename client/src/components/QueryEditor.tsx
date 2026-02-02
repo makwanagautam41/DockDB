@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Clock, FileJson, AlertCircle, Copy, Download, Save, History, BookmarkPlus } from 'lucide-react';
+import { Play, Clock, FileJson, AlertCircle, Copy, Download, Save, History, BookmarkPlus, Trash2 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +21,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -62,6 +72,7 @@ export const QueryEditor: React.FC = () => {
   const [queryDescription, setQueryDescription] = useState('');
   const [savedQueries, setSavedQueries] = useState<any[]>([]);
   const [queryHistory, setQueryHistory] = useState<any[]>([]);
+  const [deletingQueryId, setDeletingQueryId] = useState<string | null>(null);
 
   // Load saved queries and history on mount
   useEffect(() => {
@@ -84,6 +95,19 @@ export const QueryEditor: React.FC = () => {
       setQueryHistory(history);
     } catch (error) {
       console.error('Failed to load query history:', error);
+    }
+  };
+
+  const handleDeleteSavedQuery = async () => {
+    if (!deletingQueryId) return;
+
+    try {
+      await queryService.deleteSavedQuery(deletingQueryId);
+      toast.success('Query deleted successfully');
+      setDeletingQueryId(null);
+      loadSavedQueries();
+    } catch (error: any) {
+      toast.error('Failed to delete query');
     }
   };
 
@@ -240,18 +264,33 @@ export const QueryEditor: React.FC = () => {
             </Select>
 
             {savedQueries.length > 0 && (
-              <Select onValueChange={handleSavedQuerySelect}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Saved queries..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {savedQueries.map((sq) => (
-                    <SelectItem key={sq.id} value={sq.id}>
-                      {sq.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Select onValueChange={handleSavedQuerySelect}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Saved queries..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedQueries.map((sq) => (
+                      <div key={sq.id} className="flex items-center justify-between group px-2 py-1.5 hover:bg-accent rounded-sm">
+                        <SelectItem value={sq.id} className="flex-1 border-0 p-0">
+                          {sq.name}
+                        </SelectItem>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingQueryId(sq.id);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
           </div>
 
@@ -426,6 +465,27 @@ export const QueryEditor: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Query Confirmation */}
+      <AlertDialog open={!!deletingQueryId} onOpenChange={() => setDeletingQueryId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Saved Query</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this saved query? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSavedQuery}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
