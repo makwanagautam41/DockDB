@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Play, Clock, FileJson, AlertCircle, Copy, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Clock, FileJson, AlertCircle, Copy, Download, Save, History, BookmarkPlus } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,36 +10,122 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { queryApi } from '@/lib/mockApi';
-import { exampleQueries } from '@/lib/mockData';
-import { Document } from '@/services';
+import { queryService, QueryOperation } from '@/services/queryService';
+import { useApp } from '@/context/AppContext';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+
+// Example queries for MongoDB
+const exampleQueries = [
+  {
+    name: 'Find all documents',
+    operation: 'find' as QueryOperation,
+    query: '{}',
+  },
+  {
+    name: 'Find with filter',
+    operation: 'find' as QueryOperation,
+    query: '{ "status": "active" }',
+  },
+  {
+    name: 'Count documents',
+    operation: 'count' as QueryOperation,
+    query: '{ "status": "active" }',
+  },
+  {
+    name: 'Aggregate pipeline',
+    operation: 'aggregate' as QueryOperation,
+    query: '[\n  { "$group": { "_id": "$status", "count": { "$sum": 1 } } },\n  { "$sort": { "count": -1 } }\n]',
+  },
+];
 
 export const QueryEditor: React.FC = () => {
+  const { state } = useApp();
   const [query, setQuery] = useState(exampleQueries[0].query);
+  const [operation, setOperation] = useState<QueryOperation>('find');
   const [isRunning, setIsRunning] = useState(false);
-  const [results, setResults] = useState<Document[] | null>(null);
+  const [results, setResults] = useState<any>(null);
   const [executionTime, setExecutionTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [queryName, setQueryName] = useState('');
+  const [queryDescription, setQueryDescription] = useState('');
+  const [savedQueries, setSavedQueries] = useState<any[]>([]);
+  const [queryHistory, setQueryHistory] = useState<any[]>([]);
+
+  // Load saved queries and history on mount
+  useEffect(() => {
+    loadSavedQueries();
+    loadQueryHistory();
+  }, []);
+
+  const loadSavedQueries = async () => {
+    try {
+      const queries = await queryService.getSavedQueries();
+      setSavedQueries(queries);
+    } catch (error) {
+      console.error('Failed to load saved queries:', error);
+    }
+  };
+
+  const loadQueryHistory = async () => {
+    try {
+      const history = await queryService.getQueryHistory(20);
+      setQueryHistory(history);
+    } catch (error) {
+      console.error('Failed to load query history:', error);
+    }
+  };
 
   const handleRunQuery = async () => {
+    if (!state.activeConnection || !state.selectedDatabase || !state.selectedCollection) {
+      toast.error('Please select a connection, database, and collection first');
+      return;
+    }
+
     setIsRunning(true);
     setError(null);
 
     try {
-      const response = await queryApi.execute(query);
-
-      if (response.success && response.data) {
-        setResults(response.data.results);
-        setExecutionTime(response.data.executionTime);
-        toast.success(`Query completed in ${response.data.executionTime}ms`);
-      } else {
-        setError(response.error || 'Query failed');
-        setResults(null);
+      // Parse the query JSON
+      let parsedQuery;
+      try {
+        parsedQuery = JSON.parse(query);
+      } catch (e) {
+        throw new Error('Invalid JSON query. Please check your syntax.');
       }
-    } catch (e) {
-      setError('Failed to execute query');
+
+      const response = await queryService.executeQuery(
+        state.activeConnection.id,
+        state.selectedDatabase,
+        state.selectedCollection.name,
+        {
+          operation,
+          query: parsedQuery,
+        }
+      );
+
+      setResults(response.result);
+      setExecutionTime(response.executionTime);
+      toast.success(`Query completed in ${response.executionTime}ms`);
+
+      // Reload history
+      loadQueryHistory();
+    } catch (e: any) {
+      const errorMessage = e.response?.data?.error || e.message || 'Failed to execute query';
+      setError(errorMessage);
       setResults(null);
+      toast.error(errorMessage);
     } finally {
       setIsRunning(false);
     }
@@ -49,6 +135,53 @@ export const QueryEditor: React.FC = () => {
     const example = exampleQueries.find(e => e.name === name);
     if (example) {
       setQuery(example.query);
+      setOperation(example.operation);
+    }
+  };
+
+  const handleSavedQuerySelect = async (queryId: string) => {
+    try {
+      const savedQuery = await queryService.getSavedQuery(queryId);
+      setQuery(JSON.stringify(savedQuery.query, null, 2));
+      setOperation(savedQuery.operation);
+      toast.success(`Loaded query: ${savedQuery.name}`);
+    } catch (error: any) {
+      toast.error('Failed to load saved query');
+    }
+  };
+
+  const handleSaveQuery = async () => {
+    if (!state.activeConnection || !state.selectedDatabase || !state.selectedCollection) {
+      toast.error('Please select a connection, database, and collection first');
+      return;
+    }
+
+    if (!queryName.trim()) {
+      toast.error('Please enter a query name');
+      return;
+    }
+
+    try {
+      const parsedQuery = JSON.parse(query);
+
+      await queryService.saveQuery({
+        name: queryName,
+        description: queryDescription,
+        connectionId: state.activeConnection.id,
+        databaseName: state.selectedDatabase,
+        collectionName: state.selectedCollection.name,
+        operation,
+        query: parsedQuery,
+      });
+
+      toast.success('Query saved successfully');
+      setIsSaveDialogOpen(false);
+      setQueryName('');
+      setQueryDescription('');
+      loadSavedQueries();
+    } catch (e: any) {
+      const errorMessage = e.response?.data?.error || e.message || 'Failed to save query';
+      toast.error(errorMessage);
     }
   };
 
@@ -72,6 +205,7 @@ export const QueryEditor: React.FC = () => {
     }
   };
 
+
   return (
     <div className="flex-1 flex flex-col h-full">
       {/* Query Editor */}
@@ -79,9 +213,22 @@ export const QueryEditor: React.FC = () => {
         {/* Toolbar */}
         <div className="p-3 border-b border-border flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
+            <Select value={operation} onValueChange={(value) => setOperation(value as QueryOperation)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="find">Find</SelectItem>
+                <SelectItem value="aggregate">Aggregate</SelectItem>
+                <SelectItem value="count">Count</SelectItem>
+                <SelectItem value="updateMany">Update Many</SelectItem>
+                <SelectItem value="deleteMany">Delete Many</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select onValueChange={handleExampleSelect}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Load example query..." />
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Load example..." />
               </SelectTrigger>
               <SelectContent>
                 {exampleQueries.map((example) => (
@@ -91,32 +238,70 @@ export const QueryEditor: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
+
+            {savedQueries.length > 0 && (
+              <Select onValueChange={handleSavedQuerySelect}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Saved queries..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedQueries.map((sq) => (
+                    <SelectItem key={sq.id} value={sq.id}>
+                      {sq.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
-          <Button
-            onClick={handleRunQuery}
-            disabled={isRunning}
-            className="gap-2"
-          >
-            {isRunning ? (
-              <>
-                <div className="spinner" />
-                Running...
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4" />
-                Run Query
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setIsSaveDialogOpen(true)}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              Save Query
+            </Button>
+
+            <Button
+              onClick={handleRunQuery}
+              disabled={isRunning}
+              className="gap-2"
+            >
+              {isRunning ? (
+                <>
+                  <div className="spinner" />
+                  Running...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  Run Query
+                </>
+              )}
+            </Button>
+          </div>
         </div>
+
+        {/* Connection Info */}
+        {state.activeConnection && state.selectedDatabase && state.selectedCollection && (
+          <div className="px-3 py-2 bg-muted/50 border-b border-border text-xs text-muted-foreground">
+            <span className="font-medium">{state.activeConnection.name}</span>
+            {' / '}
+            <span className="font-medium">{state.selectedDatabase}</span>
+            {' / '}
+            <span className="font-medium">{state.selectedCollection.name}</span>
+          </div>
+        )}
 
         {/* Editor */}
         <div className="flex-1 min-h-[200px]">
           <Editor
             height="100%"
-            language="javascript"
+            language="json"
             value={query}
             onChange={(value) => setQuery(value || '')}
             theme="vs-dark"
@@ -149,12 +334,17 @@ export const QueryEditor: React.FC = () => {
             )}
             {results && (
               <span className="text-xs text-muted-foreground">
-                {results.length} document{results.length !== 1 ? 's' : ''}
+                {Array.isArray(results)
+                  ? `${results.length} document${results.length !== 1 ? 's' : ''}`
+                  : typeof results === 'object'
+                    ? 'Result object'
+                    : `Result: ${results}`
+                }
               </span>
             )}
           </div>
 
-          {results && results.length > 0 && (
+          {results && (
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={copyResults} className="gap-1">
                 <Copy className="h-3 w-3" />
@@ -184,13 +374,11 @@ export const QueryEditor: React.FC = () => {
               <p className="text-muted-foreground">
                 Run a query to see results here
               </p>
-            </div>
-          ) : results.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <FileJson className="h-12 w-12 text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">
-                No documents match your query
-              </p>
+              {!state.activeConnection && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Please connect to a database first
+                </p>
+              )}
             </div>
           ) : (
             <pre className="text-sm font-mono whitespace-pre-wrap">
@@ -199,6 +387,45 @@ export const QueryEditor: React.FC = () => {
           )}
         </ScrollArea>
       </div>
+
+      {/* Save Query Dialog */}
+      <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save Query</DialogTitle>
+            <DialogDescription>
+              Save this query for later use
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="query-name">Query Name</Label>
+              <Input
+                id="query-name"
+                placeholder="My custom query"
+                value={queryName}
+                onChange={(e) => setQueryName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="query-description">Description (optional)</Label>
+              <Textarea
+                id="query-description"
+                placeholder="What does this query do?"
+                value={queryDescription}
+                onChange={(e) => setQueryDescription(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSaveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveQuery}>Save Query</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
