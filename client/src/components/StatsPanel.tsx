@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  BarChart3, 
-  Database, 
-  File, 
-  Layers, 
+import {
+  BarChart3,
+  Database,
+  File,
+  Layers,
   HardDrive,
   RefreshCw,
 } from 'lucide-react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -43,7 +43,7 @@ export const StatsPanel: React.FC = () => {
 
   const loadStats = async () => {
     if (!state.selectedCollection) return;
-    
+
     setIsLoading(true);
     try {
       const response = await collectionApi.getStats(state.selectedCollection.id);
@@ -181,31 +181,37 @@ export const StatsPanel: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.dataTypes} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                  <YAxis 
-                    type="category" 
-                    dataKey="type" 
-                    stroke="hsl(var(--muted-foreground))" 
-                    fontSize={12}
-                    width={60}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    fill="hsl(var(--primary))"
-                    radius={[0, 4, 4, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {stats.dataTypes && stats.dataTypes.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.dataTypes} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis
+                      type="category"
+                      dataKey="type"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      width={60}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Bar
+                      dataKey="count"
+                      fill="hsl(var(--primary))"
+                      radius={[0, 4, 4, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  No data type information available
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -217,38 +223,44 @@ export const StatsPanel: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stats.dataTypes}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="count"
-                    nameKey="type"
-                    label={({ type, percent }) => 
-                      `${type} (${(percent * 100).toFixed(0)}%)`
-                    }
-                    labelLine={false}
-                  >
-                    {stats.dataTypes.map((_, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={COLORS[index % COLORS.length]} 
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {stats.dataTypes && stats.dataTypes.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={stats.dataTypes}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="count"
+                      nameKey="type"
+                      label={({ type, percent }) =>
+                        `${type} (${(percent * 100).toFixed(0)}%)`
+                      }
+                      labelLine={false}
+                    >
+                      {stats.dataTypes.map((_, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  No data type information available
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -260,40 +272,46 @@ export const StatsPanel: React.FC = () => {
           <CardTitle className="text-base">Indexes</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left p-3 font-medium">Name</th>
-                  <th className="text-left p-3 font-medium">Keys</th>
-                  <th className="text-left p-3 font-medium">Unique</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.selectedCollection.indexes.map((index, i) => (
-                  <tr key={i} className="border-t border-border">
-                    <td className="p-3 font-mono text-xs">{index.name}</td>
-                    <td className="p-3 font-mono text-xs">
-                      {Object.entries(index.keys).map(([k, v]) => (
-                        <span key={k} className="mr-2">
-                          {k}: {v}
-                        </span>
-                      ))}
-                    </td>
-                    <td className="p-3">
-                      {index.unique ? (
-                        <span className="text-xs px-2 py-0.5 bg-primary/15 text-primary rounded-full">
-                          Yes
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">No</span>
-                      )}
-                    </td>
+          {state.selectedCollection.indexes && state.selectedCollection.indexes.length > 0 ? (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-3 font-medium">Name</th>
+                    <th className="text-left p-3 font-medium">Keys</th>
+                    <th className="text-left p-3 font-medium">Unique</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {state.selectedCollection.indexes.map((index, i) => (
+                    <tr key={i} className="border-t border-border">
+                      <td className="p-3 font-mono text-xs">{index.name}</td>
+                      <td className="p-3 font-mono text-xs">
+                        {Object.entries(index.key || {}).map(([k, v]) => (
+                          <span key={k} className="mr-2">
+                            {k}: {String(v)}
+                          </span>
+                        ))}
+                      </td>
+                      <td className="p-3">
+                        {index.unique ? (
+                          <span className="text-xs px-2 py-0.5 bg-primary/15 text-primary rounded-full">
+                            Yes
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No indexes available for this collection
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

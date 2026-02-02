@@ -11,6 +11,7 @@ export interface Collection {
   options?: any;
   databaseName?: string; // Added for frontend use
   documentCount?: number; // Added for frontend use
+  indexes?: Index[]; // Added for frontend use
 }
 
 export interface CollectionStats {
