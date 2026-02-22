@@ -7,6 +7,8 @@ RUN npm install
 
 COPY . .
 
-EXPOSE 5173
+# Must match the port in vite.config.ts (5170)
+EXPOSE 5170
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+# Run Vite dev server on 0.0.0.0 so it's accessible outside the container
+CMD ["npx", "vite", "--host", "0.0.0.0", "--port", "5170"]
